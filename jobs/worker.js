@@ -1,4 +1,3 @@
-import { CronJob } from 'cron';
 import dotenv from 'dotenv';
 import { logger } from '../middleware/index.js';
 import launches from './launches.js';
@@ -10,62 +9,54 @@ import cores from './cores.js';
 import roadster from './roadster.js';
 import upcoming from './upcoming.js';
 import starlink from './starlink.js';
-import webcast from './webcast.js';
-import launchLibrary from './launch-library.js';
+// import webcast from './webcast.js';             // Dropped broken script
+// import launchLibrary from './launch-library.js'; // Dropped broken script
 
 // Env init
 dotenv.config();
 
-// Every 10 minutes
-const launchesJob = new CronJob('*/10 * * * *', launches);
+const seedEverything = async () => {
+  try {
+    logger.info('Starting manual sequence database seeding...');
+    
+    // We run them sequentially so they don't fight for DB connections
+    logger.info('Seeding launchpads...');
+    await launchpads();
+    
+    logger.info('Seeding landpads...');
+    await landpads();
+    
+    logger.info('Seeding capsules...');
+    await capsules();
+    
+    logger.info('Seeding cores...');
+    await cores();
+    
+    logger.info('Seeding roadster...');
+    await roadster();
+    
+    logger.info('Seeding payloads...');
+    await payloads();
+    
+    logger.info('Seeding starlink...');
+    await starlink();
+    
+    logger.info('Seeding upcoming...');
+    await upcoming();
+    
+    logger.info('Seeding launches...');
+    await launches();
 
-// Every 10 minutes
-const landpadsJob = new CronJob('*/10 * * * *', landpads);
+    logger.info('Database seeding completed successfully!');
+  } catch (error) {
+    const formatted = {
+      name: 'worker-manual-seed',
+      error: error.message,
+      stack: error.stack,
+    };
+    logger.error(formatted);
+  }
+};
 
-// Every 10 minutes
-const launchpadsJob = new CronJob('*/10 * * * *', launchpads);
-
-// Every 10 minutes
-const capsulesJob = new CronJob('*/10 * * * *', capsules);
-
-// Every 10 minutes
-const coresJob = new CronJob('*/10 * * * *', cores);
-
-// Every 10 minutes
-const roadsterJob = new CronJob('*/10 * * * *', roadster);
-
-// Every 10 minutes
-const upcomingJob = new CronJob('*/10 * * * *', upcoming);
-
-// Every hour on :25
-const payloadsJob = new CronJob('25 * * * *', payloads);
-
-// Every hour on :35
-const starlinkJob = new CronJob('35 * * * *', starlink);
-
-// Every 5 minutes
-const webcastJob = new CronJob('*/5 * * * *', webcast);
-
-// Every hour on :45
-const launchLibraryJob = new CronJob('45 * * * *', launchLibrary);
-
-try {
-  launchesJob.start();
-  payloadsJob.start();
-  landpadsJob.start();
-  launchpadsJob.start();
-  capsulesJob.start();
-  coresJob.start();
-  roadsterJob.start();
-  upcomingJob.start();
-  starlinkJob.start();
-  webcastJob.start();
-  launchLibraryJob.start();
-} catch (error) {
-  const formatted = {
-    name: 'worker',
-    error: error.message,
-    stack: error.stack,
-  };
-  logger.error(formatted);
-}
+// Execute immediately upon worker startup
+seedEverything();
