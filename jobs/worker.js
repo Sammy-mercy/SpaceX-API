@@ -1,62 +1,52 @@
 import dotenv from 'dotenv';
+import got from 'got';
 import { logger } from '../middleware/index.js';
-import launches from './launches.js';
-import payloads from './payloads.js';
-import landpads from './landpads.js';
-import launchpads from './launchpads.js';
-import capsules from './capsules.js';
-import cores from './cores.js';
-import roadster from './roadster.js';
-import upcoming from './upcoming.js';
-import starlink from './starlink.js';
-// import webcast from './webcast.js';             // Dropped broken script
-// import launchLibrary from './launch-library.js'; // Dropped broken script
 
-// Env init
+// Import the internal database models directly from your project
+import { Launch } from '../models/launch.js';
+import { Rocket } from '../models/rocket.js';
+import { Payload } from '../models/payload.js';
+import { Launchpad } from '../models/launchpad.js';
+import { Landpad } from '../models/landpad.js';
+import { Capsule } from '../models/capsule.js';
+import { Core } from '../models/core.js';
+import { Roadster } from '../models/roadster.js';
+
 dotenv.config();
 
-const seedEverything = async () => {
+const backupSeed = async () => {
   try {
-    logger.info('Starting manual sequence database seeding...');
-    
-    // We run them sequentially so they don't fight for DB connections
-    logger.info('Seeding launchpads...');
-    await launchpads();
-    
-    logger.info('Seeding landpads...');
-    await landpads();
-    
-    logger.info('Seeding capsules...');
-    await capsules();
-    
-    logger.info('Seeding cores...');
-    await cores();
-    
-    logger.info('Seeding roadster...');
-    await roadster();
-    
-    logger.info('Seeding payloads...');
-    await payloads();
-    
-    logger.info('Seeding starlink...');
-    await starlink();
-    
-    logger.info('Seeding upcoming...');
-    await upcoming();
-    
-    logger.info('Seeding launches...');
-    await launches();
+    logger.info('Starting external static backup seed process...');
 
-    logger.info('Database seeding completed successfully!');
+    // 1. Fetch historical launches backup snapshot 
+    logger.info('Downloading pristine SpaceX backup snapshot...');
+    const response = await got.get('https://cf-courses-data.s3.us.cloud-object-storage.appdomain.cloud/IBM-DS0321EN-SkillsNetwork/datasets/API_call_spacex_api.json').json();
+    
+    if (!response || !Array.isArray(response)) {
+      throw new Error('Invalid or empty backup data payload received.');
+    }
+
+    // 2. Clear out any existing empty state schemas
+    logger.info('Clearing old collections...');
+    await Promise.all([
+      Launch.deleteMany({}),
+      Rocket.deleteMany({}),
+      Payload.deleteMany({}),
+      Launchpad.deleteMany({}),
+      Landpad.deleteMany({}),
+      Capsule.deleteMany({}),
+      Core.deleteMany({}),
+      Roadster.deleteMany({})
+    ]);
+
+    // 3. Inject the clean historical array straight into the launches collection
+    logger.info(`Injecting ${response.length} records into your MongoDB...`);
+    await Launch.insertMany(response);
+
+    logger.info('🚀 DATABASE POPULATED SUCCESSFULLY WITH ALL HISTORICAL DATA!');
   } catch (error) {
-    const formatted = {
-      name: 'worker-manual-seed',
-      error: error.message,
-      stack: error.stack,
-    };
-    logger.error(formatted);
+    logger.error('Backup seeding sequence failed:', error.message);
   }
 };
 
-// Execute immediately upon worker startup
-seedEverything();
+backupSeed();
