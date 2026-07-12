@@ -4,9 +4,8 @@ import { MongoClient, ObjectId } from 'mongodb';
 
 dotenv.config();
 
-const clearAndSeedMasterStatic = async () => {
+const cleanAndSeedFinal = async () => {
   const mongoUri = process.env.SPACEX_MONGO;
-
   if (!mongoUri) {
     console.error('Error: SPACEX_MONGO environment variable is missing.');
     return;
@@ -17,16 +16,69 @@ const clearAndSeedMasterStatic = async () => {
   try {
     console.log('Connecting directly to MongoDB instance...');
     await client.connect();
-    const db = client.db(); 
+    const db = client.db();
 
-    // 1. Fetch pristine raw snapshots where IDs are already formatted perfectly
-    console.log('Downloading pre-formatted datasets...');
-    const [launches, rockets] = await Promise.all([
-      got.get('https://cf-courses-data.s3.us.cloud-object-storage.appdomain.cloud/IBM-DS0321EN-SkillsNetwork/datasets/API_call_spacex_api.json').json(),
-      got.get('https://api.jsonbin.io/v3/b/661001e0e41b4d34e4dedb42?meta=false').json()
-    ]);
+    // 1. Download the working launches dataset
+    console.log('Downloading pristine launches dataset...');
+    const launches = await got.get('https://cf-courses-data.s3.us.cloud-object-storage.appdomain.cloud/IBM-DS0321EN-SkillsNetwork/datasets/API_call_spacex_api.json').json();
+    
+    if (!launches || !Array.isArray(launches)) {
+      throw new Error('Invalid or empty launch backup payload.');
+    }
 
-    // 2. Map and apply standard BSON ObjectIds to the documents natively
+    // 2. Hardcoded flawless historical Rockets data with strict ObjectIds
+    const rockets = [
+      {
+        _id: new ObjectId("5e9d0d95eda69955f709d1eb"),
+        id: "5e9d0d95eda69955f709d1eb",
+        name: "Falcon 1",
+        type: "rocket",
+        active: false,
+        stages: 2,
+        boosters: 0,
+        cost_per_launch: 6700000,
+        success_rate_pct: 40,
+        first_flight: "2006-03-24"
+      },
+      {
+        _id: new ObjectId("5e9d0d95eda69973a809d1ec"),
+        id: "5e9d0d95eda69973a809d1ec",
+        name: "Falcon 9",
+        type: "rocket",
+        active: true,
+        stages: 2,
+        boosters: 0,
+        cost_per_launch: 50000000,
+        success_rate_pct: 98,
+        first_flight: "2010-06-04"
+      },
+      {
+        _id: new ObjectId("5e9d0d95eda69974db09d1ed"),
+        id: "5e9d0d95eda69974db09d1ed",
+        name: "Falcon Heavy",
+        type: "rocket",
+        active: true,
+        stages: 2,
+        boosters: 2,
+        cost_per_launch: 90000000,
+        success_rate_pct: 100,
+        first_flight: "2018-02-06"
+      },
+      {
+        _id: new ObjectId("5e9d0d96eda699382d09d1ee"),
+        id: "5e9d0d96eda699382d09d1ee",
+        name: "Starship",
+        type: "rocket",
+        active: true,
+        stages: 2,
+        boosters: 0,
+        cost_per_launch: 7000000,
+        success_rate_pct: 100,
+        first_flight: "2023-04-20"
+      }
+    ];
+
+    // 3. Format the launch documents so they link up correctly with Mongoose types
     const formattedLaunches = launches.map(l => {
       if (l._id) l._id = new ObjectId(l._id);
       if (typeof l.rocket === 'string' && ObjectId.isValid(l.rocket)) l.rocket = new ObjectId(l.rocket);
@@ -34,36 +86,22 @@ const clearAndSeedMasterStatic = async () => {
       return l;
     });
 
-    const formattedRockets = rockets.map(r => {
-      const targetId = r._id || r.id;
-      if (targetId && ObjectId.isValid(targetId)) {
-        r._id = new ObjectId(targetId);
-      }
-      return r;
-    });
+    // 4. Wipe and seed collections cleanly
+    console.log('Wiping out old collections...');
+    await db.collection('launches').deleteMany({});
+    await db.collection('rockets').deleteMany({});
 
-    // 3. Clean and inject directly into your database collections
-    const collections = [
-      { name: 'launches', data: formattedLaunches },
-      { name: 'rockets', data: formattedRockets }
-    ];
+    console.log('Injecting fresh records...');
+    await db.collection('launches').insertMany(formattedLaunches);
+    await db.collection('rockets').insertMany(rockets);
 
-    for (const col of collections) {
-      const collection = db.collection(col.name);
-      console.log(`Clearing collection: ${col.name}...`);
-      await collection.deleteMany({});
-      
-      console.log(`Injecting ${col.data.length} clean records into [${col.name}]...`);
-      await collection.insertMany(col.data);
-    }
-
-    console.log('🚀 CLEAN RE-SEED COMPLETE! DATABASES ARE COMPLETELY ALIGNED.');
+    console.log('🚀 CLEAN RE-SEED COMPLETE! ALL SYSTEMS OPERATIONAL.');
   } catch (error) {
-    console.error('Static seeding operation failed:', error.message);
+    console.error('Seeding process failed:', error.message);
   } finally {
     await client.close();
-    console.log('Database synchronization connection dropped safely.');
+    console.log('Database connection dropped safely.');
   }
 };
 
-clearAndSeedMasterStatic();
+cleanAndSeedFinal();
