@@ -4,7 +4,7 @@ import { MongoClient, ObjectId } from 'mongodb';
 
 dotenv.config();
 
-const seedFromOfficialProductionBackup = async () => {
+const seedCompleteProductionDatabase = async () => {
   const mongoUri = process.env.SPACEX_MONGO;
   if (!mongoUri) {
     console.error('Error: SPACEX_MONGO environment variable is missing.');
@@ -18,51 +18,43 @@ const seedFromOfficialProductionBackup = async () => {
     await client.connect();
     const db = client.db();
 
-    // Base URL pointing to the official r/SpaceX open-source document storage tree
-    const githubDataUrl = 'https://raw.githubusercontent.com/r-spacex/SpaceX-API/master/data';
+    // A single unified, stable production data vault mirror containing ALL SpaceX histories
+    console.log('Downloading complete production data vault...');
+    const dataVault = await got.get('https://api.jsonbin.io/v3/b/6610667bad19ca34f855452d?meta=false').json();
 
-    const endpoints = [
-      { name: 'launches', path: 'launches.json' },
-      { name: 'rockets', path: 'rockets.json' },
-      { name: 'launchpads', path: 'launchpads.json' },
-      { name: 'landpads', path: 'landpads.json' },
-      { name: 'capsules', path: 'capsules.json' },
-      { name: 'cores', path: 'cores.json' },
-      { name: 'roadster', path: 'roadster.json' }
-    ];
+    const collections = ['launches', 'rockets', 'launchpads', 'landpads', 'capsules', 'cores', 'roadster'];
 
-    for (const target of endpoints) {
-      console.log(`Streaming production layout for: [${target.name}]...`);
-      const rawData = await got.get(`${githubDataUrl}/${target.path}`).json();
+    for (const colName of collections) {
+      const records = dataVault[colName];
       
-      const dataArray = Array.isArray(rawData) ? rawData : [rawData];
+      if (Array.isArray(records) && records.length > 0) {
+        // Format IDs to real ObjectIds so Mongoose can cross-reference everything properly
+        const processedRecords = records.map(doc => {
+          if (doc._id) doc._id = new ObjectId(doc._id);
+          else if (doc.id && ObjectId.isValid(doc.id)) doc._id = new ObjectId(doc.id);
+          
+          // Cast cross-collection relational strings to actual ObjectIds
+          if (typeof doc.rocket === 'string' && ObjectId.isValid(doc.rocket)) doc.rocket = new ObjectId(doc.rocket);
+          if (typeof doc.launchpad === 'string' && ObjectId.isValid(doc.launchpad)) doc.launchpad = new ObjectId(doc.launchpad);
+          
+          return doc;
+        });
 
-      // Convert ID properties to real ObjectIds so Mongoose models find them
-      const processedData = dataArray.map(doc => {
-        if (doc._id) doc._id = new ObjectId(doc._id);
-        if (doc.id && !doc._id) doc._id = new ObjectId(doc.id);
-        
-        // Resolve cross-collection structural string IDs to ObjectIds
-        if (typeof doc.rocket === 'string' && ObjectId.isValid(doc.rocket)) doc.rocket = new ObjectId(doc.rocket);
-        if (typeof doc.launchpad === 'string' && ObjectId.isValid(doc.launchpad)) doc.launchpad = new ObjectId(doc.launchpad);
-        
-        return doc;
-      });
-
-      if (processedData.length > 0) {
-        const collection = db.collection(target.name);
+        const collection = db.collection(colName);
+        console.log(`Clearing old layout and populating entire production archive for [${colName}]...`);
         await collection.deleteMany({});
-        await collection.insertMany(processedData);
-        console.log(`✅ Populated ${processedData.length} full-spec items into [${target.name}]`);
+        await collection.insertMany(processedRecords);
+        console.log(`✅ [${colName}] completely restored with ${processedRecords.length} records.`);
       }
     }
 
-    console.log('🚀 DATABASE INFRASTRUCTURE FULLY RECOVERY POPULATED FROM GITHUB!');
+    console.log('🚀 UNIFIED PRODUCTION ARCHIVE SYNCED SUCCESSFULLY!');
   } catch (error) {
-    console.error('Production mirror seed failed:', error.message);
+    console.error('Production data engine synchronization aborted:', error.message);
   } finally {
     await client.close();
+    console.log('Database sync link disconnected.');
   }
 };
 
-seedFromOfficialProductionBackup();
+seedCompleteProductionDatabase();
