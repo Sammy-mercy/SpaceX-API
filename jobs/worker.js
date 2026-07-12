@@ -4,7 +4,7 @@ import { MongoClient, ObjectId } from 'mongodb';
 
 dotenv.config();
 
-const extractAndSeedMaster = async () => {
+const extractAndSeedMasterWithIds = async () => {
   const mongoUri = process.env.SPACEX_MONGO;
   if (!mongoUri) {
     console.error('Error: SPACEX_MONGO environment variable is missing.');
@@ -18,14 +18,13 @@ const extractAndSeedMaster = async () => {
     await client.connect();
     const db = client.db();
 
-    console.log('Streaming multi-megabyte production master backup from IBM S3...');
+    console.log('Streaming production master backup from IBM S3...');
     const masterLaunches = await got.get('https://cf-courses-data.s3.us.cloud-object-storage.appdomain.cloud/IBM-DS0321EN-SkillsNetwork/datasets/API_call_spacex_api.json').json();
     
     if (!masterLaunches || !Array.isArray(masterLaunches)) {
       throw new Error('Could not parse valid raw backup stream array.');
     }
 
-    // Storage maps to filter duplicates while preserving rich nested technical configurations
     const rocketsMap = new Map();
     const launchpadsMap = new Map();
     const landpadsMap = new Map();
@@ -33,18 +32,21 @@ const extractAndSeedMaster = async () => {
     const coresMap = new Map();
 
     const cleanLaunches = masterLaunches.map(launch => {
-      // 1. Process and extract deeply nested Full-Spec Rocket profiles
+      // 1. Process and extract Full-Spec Rockets
       if (launch.rocket) {
-        const rId = typeof launch.rocket === 'string' ? launch.rocket : (launch.rocket.id || launch.rocket._id);
+        const rId = typeof launch.rocket === 'string' ? launch.rocket : (launch.rocket.id || launch.rocket._id || '5e9d0d95eda69955f709d1eb');
         if (rId) {
           if (typeof launch.rocket === 'object' && !rocketsMap.has(rId)) {
             rocketsMap.set(rId, { ...launch.rocket, _id: new ObjectId(rId), id: rId });
+          } else if (!rocketsMap.has(rId)) {
+            // Fallback base configuration for Falcon 1 if it defaults to a string reference
+            rocketsMap.set(rId, { _id: new ObjectId(rId), id: rId, name: 'Falcon 1', type: 'rocket' });
           }
           launch.rocket = new ObjectId(rId);
         }
       }
 
-      // 2. Process and extract full Launchpad configurations
+      // 2. Process and extract Launchpads
       if (launch.launchpad) {
         const pId = typeof launch.launchpad === 'string' ? launch.launchpad : (launch.launchpad.id || launch.launchpad._id);
         if (pId) {
@@ -55,7 +57,7 @@ const extractAndSeedMaster = async () => {
         }
       }
 
-      // 3. Process and extract Cores and Landpads out of the historical components arrays
+      // 3. Process and extract Cores and Landpads
       if (Array.isArray(launch.cores)) {
         launch.cores = launch.cores.map(c => {
           if (c.core) {
@@ -80,7 +82,7 @@ const extractAndSeedMaster = async () => {
         });
       }
 
-      // 4. Process and extract historical Capsule structures
+      // 4. Process and extract Capsules
       if (Array.isArray(launch.capsules)) {
         launch.capsules = launch.capsules.map(cap => {
           const capId = typeof cap === 'string' ? cap : (cap.id || cap._id);
@@ -94,12 +96,12 @@ const extractAndSeedMaster = async () => {
         });
       }
 
-      // Cast the parent launch ID properly
+      // Format parent launch IDs explicitly
       if (launch._id) launch._id = new ObjectId(launch._id);
+      if (launch.id) launch.id = launch.id;
       return launch;
     });
 
-    // Build lists from our parsed maps
     const targets = [
       { name: 'launches', data: cleanLaunches },
       { name: 'rockets', data: Array.from(rocketsMap.values()) },
@@ -109,24 +111,22 @@ const extractAndSeedMaster = async () => {
       { name: 'cores', data: Array.from(coresMap.values()) }
     ];
 
-    // Seed everything into their database folders
     for (const target of targets) {
       const collection = db.collection(target.name);
       await collection.deleteMany({});
       
       if (target.data.length > 0) {
-        console.log(`Writing ${target.data.length} full-spec items into collection [${target.name}]...`);
+        console.log(`Writing ${target.data.length} flat-aligned root items into [${target.name}]...`);
         await collection.insertMany(target.data);
       }
     }
 
-    console.log('🚀 SYSTEM RECOVERY COMPLETE. EVERY FOLDER LOADED WITH FULL SPECS!');
+    console.log('🚀 SYSTEM SEEDED SUCCESSFULLY WITH ALIGNED ROOT ENGINES!');
   } catch (error) {
     console.error('Extraction process runtime error:', error.message);
   } finally {
     await client.close();
-    console.log('Database synchronization connection terminated safely.');
   }
 };
 
-extractAndSeedMaster();
+extractAndSeedMasterWithIds();
