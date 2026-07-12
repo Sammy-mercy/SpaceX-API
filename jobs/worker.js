@@ -4,7 +4,7 @@ import { MongoClient, ObjectId } from 'mongodb';
 
 dotenv.config();
 
-const clearAndSeedAllCollections = async () => {
+const clearAndSeedMasterStatic = async () => {
   const mongoUri = process.env.SPACEX_MONGO;
 
   if (!mongoUri) {
@@ -19,111 +19,51 @@ const clearAndSeedAllCollections = async () => {
     await client.connect();
     const db = client.db(); 
 
-    console.log('Downloading pristine SpaceX backup snapshot from IBM S3...');
-    const launchesData = await got.get('https://cf-courses-data.s3.us.cloud-object-storage.appdomain.cloud/IBM-DS0321EN-SkillsNetwork/datasets/API_call_spacex_api.json').json();
-    
-    if (!launchesData || !Array.isArray(launchesData)) {
-      throw new Error('Invalid or empty backup data payload received.');
-    }
+    // 1. Fetch pristine raw snapshots where IDs are already formatted perfectly
+    console.log('Downloading pre-formatted datasets...');
+    const [launches, rockets] = await Promise.all([
+      got.get('https://cf-courses-data.s3.us.cloud-object-storage.appdomain.cloud/IBM-DS0321EN-SkillsNetwork/datasets/API_call_spacex_api.json').json(),
+      got.get('https://api.jsonbin.io/v3/b/661001e0e41b4d34e4dedb42?meta=false').json()
+    ]);
 
-    const rocketsMap = new Map();
-    const launchpadsMap = new Map();
-    const coresMap = new Map();
-    const capsulesMap = new Map();
-
-    launchesData.forEach(launch => {
-      // Convert launch root _id to a proper ObjectId
-      if (launch._id) launch._id = new ObjectId(launch._id);
-
-      // Extract and convert Rocket
-      if (launch.rocket) {
-        const rId = typeof launch.rocket === 'string' ? launch.rocket : (launch.rocket.id || launch.rocket._id);
-        if (rId && ObjectId.isValid(rId) && !rocketsMap.has(rId)) {
-          const rocketObj = typeof launch.rocket === 'object' ? launch.rocket : { name: 'Falcon' };
-          rocketObj._id = new ObjectId(rId);
-          rocketObj.id = rId;
-          rocketsMap.set(rId, rocketObj);
-        }
-        // Keep reference aligned for Mongoose relationship populating
-        launch.rocket = new ObjectId(rId);
-      }
-
-      // Extract and convert Launchpad
-      if (launch.launchpad) {
-        const pId = typeof launch.launchpad === 'string' ? launch.launchpad : (launch.launchpad.id || launch.launchpad._id);
-        if (pId && ObjectId.isValid(pId) && !launchpadsMap.has(pId)) {
-          const padObj = typeof launch.launchpad === 'object' ? launch.launchpad : { name: 'SpaceX Pad' };
-          padObj._id = new ObjectId(pId);
-          padObj.id = pId;
-          launchpadsMap.set(pId, padObj);
-        }
-        launch.launchpad = new ObjectId(pId);
-      }
-
-      // Extract and convert Cores
-      if (Array.isArray(launch.cores)) {
-        launch.cores.forEach(c => {
-          if (c.core) {
-            const cId = typeof c.core === 'string' ? c.core : (c.core.id || c.core._id);
-            if (cId && ObjectId.isValid(cId) && !coresMap.has(cId)) {
-              const coreObj = typeof c.core === 'object' ? c.core : {};
-              coreObj._id = new ObjectId(cId);
-              coreObj.id = cId;
-              coresMap.set(cId, coreObj);
-            }
-            c.core = new ObjectId(cId);
-          }
-        });
-      }
-
-      // Extract and convert Capsules
-      if (Array.isArray(launch.capsules)) {
-        launch.capsules.map((cap, index) => {
-          const capId = typeof cap === 'string' ? cap : (cap.id || cap._id);
-          if (capId && ObjectId.isValid(capId)) {
-            if (!capsulesMap.has(capId)) {
-              const capObj = typeof cap === 'object' ? cap : {};
-              capObj._id = new ObjectId(capId);
-              capObj.id = capId;
-              capsulesMap.set(capId, capObj);
-            }
-            launch.capsules[index] = new ObjectId(capId);
-          }
-        });
-      }
+    // 2. Map and apply standard BSON ObjectIds to the documents natively
+    const formattedLaunches = launches.map(l => {
+      if (l._id) l._id = new ObjectId(l._id);
+      if (typeof l.rocket === 'string' && ObjectId.isValid(l.rocket)) l.rocket = new ObjectId(l.rocket);
+      if (typeof l.launchpad === 'string' && ObjectId.isValid(l.launchpad)) l.launchpad = new ObjectId(l.launchpad);
+      return l;
     });
 
-    const rocketsArray = Array.from(rocketsMap.values());
-    const launchpadsArray = Array.from(launchpadsMap.values());
-    const coresArray = Array.from(coresMap.values());
-    const capsulesArray = Array.from(capsulesMap.values());
+    const formattedRockets = rockets.map(r => {
+      const targetId = r._id || r.id;
+      if (targetId && ObjectId.isValid(targetId)) {
+        r._id = new ObjectId(targetId);
+      }
+      return r;
+    });
 
-    const collectionsToSeed = [
-      { name: 'launches', data: launchesData },
-      { name: 'rockets', data: rocketsArray },
-      { name: 'launchpads', data: launchpadsArray },
-      { name: 'cores', data: coresArray },
-      { name: 'capsules', data: capsulesArray }
+    // 3. Clean and inject directly into your database collections
+    const collections = [
+      { name: 'launches', data: formattedLaunches },
+      { name: 'rockets', data: formattedRockets }
     ];
 
-    for (const item of collectionsToSeed) {
-      const collection = db.collection(item.name);
-      console.log(`Clearing old ${item.name} collection...`);
+    for (const col of collections) {
+      const collection = db.collection(col.name);
+      console.log(`Clearing collection: ${col.name}...`);
       await collection.deleteMany({});
       
-      if (item.data.length > 0) {
-        console.log(`Injecting ${item.data.length} strict typed documents into [${item.name}]...`);
-        await collection.insertMany(item.data);
-      }
+      console.log(`Injecting ${col.data.length} clean records into [${col.name}]...`);
+      await collection.insertMany(col.data);
     }
 
-    console.log('🚀 SYSTEM SEEDED SUCCESSFULLY WITH VALID OBJECTIDS!');
+    console.log('🚀 CLEAN RE-SEED COMPLETE! DATABASES ARE COMPLETELY ALIGNED.');
   } catch (error) {
-    console.error('Multi-collection seeding script failed:', error.message);
+    console.error('Static seeding operation failed:', error.message);
   } finally {
     await client.close();
-    console.log('Database connection closed.');
+    console.log('Database synchronization connection dropped safely.');
   }
 };
 
-clearAndSeedAllCollections();
+clearAndSeedMasterStatic();
