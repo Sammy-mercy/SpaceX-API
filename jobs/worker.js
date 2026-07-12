@@ -4,8 +4,9 @@ import { MongoClient } from 'mongodb';
 
 dotenv.config();
 
-const seedMasterDatabase = async () => {
+const clearAndSeedAllCollections = async () => {
   const mongoUri = process.env.SPACEX_MONGO;
+
   if (!mongoUri) {
     console.error('Error: SPACEX_MONGO environment variable is missing.');
     return;
@@ -14,72 +15,95 @@ const seedMasterDatabase = async () => {
   const client = new MongoClient(mongoUri);
 
   try {
-    console.log('Connecting to database...');
+    console.log('Connecting directly to MongoDB instance...');
     await client.connect();
-    const db = client.db();
+    const db = client.db(); 
 
-    // Mapping out the static cloud dataset snapshots for EVERY folder structure
-    const targets = [
-      {
-        collection: 'launches',
-        url: 'https://cf-courses-data.s3.us.cloud-object-storage.appdomain.cloud/IBM-DS0321EN-SkillsNetwork/datasets/API_call_spacex_api.json'
-      },
-      {
-        collection: 'rockets',
-        url: 'https://api.jsonbin.io/v3/b/661001e0e41b4d34e4dedb42?meta=false'
-      },
-      {
-        collection: 'launchpads',
-        url: 'https://api.jsonbin.io/v3/b/6610190ee41b4d34e4df9dfc?meta=false'
-      },
-      {
-        collection: 'landpads',
-        url: 'https://api.jsonbin.io/v3/b/66101a08ad19ca34f85521b4?meta=false'
-      },
-      {
-        collection: 'capsules',
-        url: 'https://api.jsonbin.io/v3/b/66101a88ad19ca34f85521eb?meta=false'
-      },
-      {
-        collection: 'cores',
-        url: 'https://api.jsonbin.io/v3/b/66101b08ad19ca34f8552230?meta=false'
-      },
-      {
-        collection: 'roadster',
-        url: 'https://api.jsonbin.io/v3/b/66101b67ad19ca34f855225c?meta=false'
+    console.log('Downloading pristine SpaceX backup snapshot from IBM S3...');
+    const launchesData = await got.get('https://cf-courses-data.s3.us.cloud-object-storage.appdomain.cloud/IBM-DS0321EN-SkillsNetwork/datasets/API_call_spacex_api.json').json();
+    
+    if (!launchesData || !Array.isArray(launchesData)) {
+      throw new Error('Invalid or empty backup data payload received.');
+    }
+
+    // --- EXTRACTING DATA FOR OTHER FOLDERS ---
+    const rocketsMap = new Map();
+    const launchpadsMap = new Map();
+    const coresMap = new Map();
+    const capsulesMap = new Map();
+
+    launchesData.forEach(launch => {
+      // Extract Rocket info if present
+      if (launch.rocket) {
+        const rId = typeof launch.rocket === 'string' ? launch.rocket : (launch.rocket.id || launch.rocket._id);
+        if (rId && !rocketsMap.has(rId)) {
+          rocketsMap.set(rId, typeof launch.rocket === 'object' ? launch.rocket : { _id: rId, id: rId, name: 'Falcon' });
+        }
       }
+
+      // Extract Launchpad info if present
+      if (launch.launchpad) {
+        const pId = typeof launch.launchpad === 'string' ? launch.launchpad : (launch.launchpad.id || launch.launchpad._id);
+        if (pId && !launchpadsMap.has(pId)) {
+          launchpadsMap.set(pId, typeof launch.launchpad === 'object' ? launch.launchpad : { _id: pId, id: pId, name: 'SpaceX Pad' });
+        }
+      }
+
+      // Extract Cores if present
+      if (Array.isArray(launch.cores)) {
+        launch.cores.forEach(c => {
+          if (c.core) {
+            const cId = typeof c.core === 'string' ? c.core : (c.core.id || c.core._id);
+            if (cId && !coresMap.has(cId)) {
+              coresMap.set(cId, typeof c.core === 'object' ? c.core : { _id: cId, id: cId });
+            }
+          }
+        });
+      }
+
+      // Extract Capsules if present
+      if (Array.isArray(launch.capsules)) {
+        launch.capsules.forEach(cap => {
+          const capId = typeof cap === 'string' ? cap : (cap.id || cap._id);
+          if (capId && !capsulesMap.has(capId)) {
+            capsulesMap.set(capId, typeof cap === 'object' ? cap : { _id: capId, id: capId });
+          }
+        });
+      }
+    });
+
+    const rocketsArray = Array.from(rocketsMap.values());
+    const launchpadsArray = Array.from(launchpadsMap.values());
+    const coresArray = Array.from(coresMap.values());
+    const capsulesArray = Array.from(capsulesMap.values());
+
+    // --- WIPING AND INJECTING INTO COLLECTIONS ---
+    const collectionsToSeed = [
+      { name: 'launches', data: launchesData },
+      { name: 'rockets', data: rocketsArray },
+      { name: 'launchpads', data: launchpadsArray },
+      { name: 'cores', data: coresArray },
+      { name: 'capsules', data: capsulesArray }
     ];
 
-    for (const target of targets) {
-      try {
-        console.log(`Downloading snapshot for: ${target.collection}...`);
-        const data = await got.get(target.url).json();
-        
-        // Safety step to automatically handle raw JSON arrays vs API wrappers
-        const documents = Array.isArray(data) ? data : (data.record || data);
-        const documentsArray = Array.isArray(documents) ? documents : [documents];
-
-        if (documentsArray.length > 0) {
-          const col = db.collection(target.collection);
-          
-          console.log(`Wiping out old structural state for: ${target.collection}`);
-          await col.deleteMany({});
-          
-          console.log(`Populating ${documentsArray.length} records into [${target.collection}]...`);
-          await col.insertMany(documentsArray);
-        }
-      } catch (innerError) {
-        console.error(`Skipped collection [${target.collection}] due to:`, innerError.message);
+    for (const item of collectionsToSeed) {
+      const collection = db.collection(item.name);
+      console.log(`Clearing old ${item.name} collection...`);
+      await collection.deleteMany({});
+      
+      if (item.data.length > 0) {
+        console.log(`Injecting ${item.data.length} documents into [${item.name}]...`);
+        await collection.insertMany(item.data);
       }
     }
 
-    console.log('🚀 MASTER POPULATION COMPLETE. EVERY COLLECTION HAS DATA!');
+    console.log('🚀 MASTER DATABASE POPULATED SUCCESSFULLY ACROSS ALL FOLDERS!');
   } catch (error) {
-    console.error('Master script failed:', error.message);
+    console.error('Multi-collection seeding script failed:', error.message);
   } finally {
     await client.close();
-    console.log('Database synchronization complete.');
+    console.log('Database connection closed.');
   }
 };
 
-seedMasterDatabase();
+clearAndSeedAllCollections();
