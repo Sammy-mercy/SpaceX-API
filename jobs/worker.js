@@ -4,7 +4,7 @@ import { MongoClient, ObjectId } from 'mongodb';
 
 dotenv.config();
 
-const extractAndSeedMasterWithIds = async () => {
+const extractAndSeedMasterProtected = async () => {
   const mongoUri = process.env.SPACEX_MONGO;
   if (!mongoUri) {
     console.error('Error: SPACEX_MONGO environment variable is missing.');
@@ -32,32 +32,40 @@ const extractAndSeedMasterWithIds = async () => {
     const coresMap = new Map();
 
     const cleanLaunches = masterLaunches.map(launch => {
-      // 1. Process and extract Full-Spec Rockets
+      // 1. Extract Rockets (with Overwrite Protection for rich data)
       if (launch.rocket) {
-        const rId = typeof launch.rocket === 'string' ? launch.rocket : (launch.rocket.id || launch.rocket._id || '5e9d0d95eda69955f709d1eb');
+        const rId = typeof launch.rocket === 'string' ? launch.rocket : (launch.rocket.id || launch.rocket._id);
         if (rId) {
-          if (typeof launch.rocket === 'object' && !rocketsMap.has(rId)) {
-            rocketsMap.set(rId, { ...launch.rocket, _id: new ObjectId(rId), id: rId });
+          if (typeof launch.rocket === 'object') {
+            const existing = rocketsMap.get(rId);
+            // ONLY save or update if we don't have it yet, OR if this new object contains the deep technical details
+            if (!existing || launch.rocket.height || launch.rocket.mass) {
+              rocketsMap.set(rId, { ...launch.rocket, _id: new ObjectId(rId), id: rId });
+            }
           } else if (!rocketsMap.has(rId)) {
-            // Fallback base configuration for Falcon 1 if it defaults to a string reference
             rocketsMap.set(rId, { _id: new ObjectId(rId), id: rId, name: 'Falcon 1', type: 'rocket' });
           }
           launch.rocket = new ObjectId(rId);
         }
       }
 
-      // 2. Process and extract Launchpads
+      // 2. Extract Launchpads (with Overwrite Protection)
       if (launch.launchpad) {
         const pId = typeof launch.launchpad === 'string' ? launch.launchpad : (launch.launchpad.id || launch.launchpad._id);
         if (pId) {
-          if (typeof launch.launchpad === 'object' && !launchpadsMap.has(pId)) {
-            launchpadsMap.set(pId, { ...launch.launchpad, _id: new ObjectId(pId), id: pId });
+          if (typeof launch.launchpad === 'object') {
+            const existing = launchpadsMap.get(pId);
+            if (!existing || launch.launchpad.locality || launch.launchpad.full_name) {
+              launchpadsMap.set(pId, { ...launch.launchpad, _id: new ObjectId(pId), id: pId });
+            }
+          } else if (!launchpadsMap.has(pId)) {
+            launchpadsMap.set(pId, { _id: new ObjectId(pId), id: pId, name: 'SpaceX Pad' });
           }
           launch.launchpad = new ObjectId(pId);
         }
       }
 
-      // 3. Process and extract Cores and Landpads
+      // 3. Extract Cores and Landpads
       if (Array.isArray(launch.cores)) {
         launch.cores = launch.cores.map(c => {
           if (c.core) {
@@ -82,7 +90,7 @@ const extractAndSeedMasterWithIds = async () => {
         });
       }
 
-      // 4. Process and extract Capsules
+      // 4. Extract Capsules
       if (Array.isArray(launch.capsules)) {
         launch.capsules = launch.capsules.map(cap => {
           const capId = typeof cap === 'string' ? cap : (cap.id || cap._id);
@@ -96,9 +104,7 @@ const extractAndSeedMasterWithIds = async () => {
         });
       }
 
-      // Format parent launch IDs explicitly
       if (launch._id) launch._id = new ObjectId(launch._id);
-      if (launch.id) launch.id = launch.id;
       return launch;
     });
 
@@ -116,12 +122,12 @@ const extractAndSeedMasterWithIds = async () => {
       await collection.deleteMany({});
       
       if (target.data.length > 0) {
-        console.log(`Writing ${target.data.length} flat-aligned root items into [${target.name}]...`);
+        console.log(`Writing ${target.data.length} protected items into [${target.name}]...`);
         await collection.insertMany(target.data);
       }
     }
 
-    console.log('🚀 SYSTEM SEEDED SUCCESSFULLY WITH ALIGNED ROOT ENGINES!');
+    console.log('🚀 MASTER SEED RUN COMPLETE! SPECIFICATIONS SECURED COMPLETED.');
   } catch (error) {
     console.error('Extraction process runtime error:', error.message);
   } finally {
@@ -129,4 +135,4 @@ const extractAndSeedMasterWithIds = async () => {
   }
 };
 
-extractAndSeedMasterWithIds();
+extractAndSeedMasterProtected();
