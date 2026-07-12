@@ -1,0 +1,203 @@
+[
+  {
+    "id": "5e9d0d95eda69955f709d1eb",
+    "name": "Falcon 1",
+    "type": "rocket",
+    "active": false,
+    "stages": 2,
+    "boosters": 0,
+    "cost_per_launch": 6700000,
+    "success_rate_pct": 40,
+    "first_flight": "2006-03-24",
+    "country": "Republic of the Marshall Islands",
+    "company": "SpaceX",
+    "height": { "meters": 22.25, "feet": 73 },
+    "diameter": { "meters": 1.68, "feet": 5.5 },
+    "mass": { "kg": 30146, "lb": 66460 },
+    "payload_weights": [
+      { "id": "leo", "name": "Low Earth Orbit", "kg": 450, "lb": 992 }
+    ],
+    "first_stage": {
+      "thrust_sea_level": { "kN": 420, "lbf": 94000 },
+      "thrust_vacuum": { "kN": 480, "lbf": 110000 },
+      "reusable": false,
+      "engines": 1,
+      "fuel_amount_tons": 44.3,
+      "burn_time_sec": 169
+    },
+    "second_stage": {
+      "thrust": { "kN": 31, "lbf": 7000 },
+      "payloads": {
+        "composite_fairing": {
+          "height": { "meters": 3.5, "feet": 11.5 },
+          "diameter": { "meters": 1.5, "feet": 4.9 }
+        },
+        "option_1": "composite fairing"
+      },
+      "reusable": false,
+      "engines": 1,
+      "fuel_amount_tons": 3.38,
+      "burn_time_sec": 378
+    },
+    "engines": {
+      "isp": { "sea_level": 267, "vacuum": 304 },
+      "thrust_sea_level": { "kN": 420, "lbf": 94000 },
+      "thrust_vacuum": { "kN": 480, "lbf": 110000 },
+      "number": 1,
+      "type": "merlin",
+      "version": "1C",
+      "layout": "single"
+    },
+    "flickr_images": [
+      "https://imgur.com/DaCf6uY.jpg"
+    ]
+  },
+  {
+    "id": "5e9d0d95eda69973a809d1ec",
+    "name": "Falcon 9",
+    "type": "rocket",
+    "active": true,
+    "stages": 2,
+    "boosters": 0,
+    "cost_per_launch": 50000000,
+    "success_rate_pct": 98,
+    "first_flight": "2010-06-04",
+    "country": "United States",
+    "company": "SpaceX",
+    "height": { "meters": 70, "feet": 229.6 },
+    "diameter": { "meters": 3.7, "feet": 12 },
+    "mass": { "kg": 549054, "lb": 1207920 },
+    "payload_weights": [
+      { "id": "leo", "name": "Low Earth Orbit", "kg": 22800, "lb": 50265 },
+      { "id": "gto", "name": "Geosynchronous Transfer Orbit", "kg": 8300, "lb": 18300 }
+    ],
+    "first_stage": {
+      "thrust_sea_level": { "kN": 7607, "lbf": 1710000 },
+      "thrust_vacuum": { "kN": 8227, "lbf": 1849500 },
+      "reusable": true,
+      "engines": 9,
+      "fuel_amount_tons": 385,
+      "burn_time_sec": 162
+    },
+    "second_stage": {
+      "thrust": { "kN": 934, "lbf": 210000 },
+      "payloads": {
+        "composite_fairing": { "height": { "meters": 13.1, "feet": 43 }, "diameter": { "meters": 5.2, "feet": 17 } },
+        "option_1": "main payload"
+      },
+      "reusable": false,
+      "engines": 1,
+      "fuel_amount_tons": 90,
+      "burn_time_sec": 397
+    },
+    "engines": {
+      "isp": { "sea_level": 288, "vacuum": 348 },
+      "thrust_sea_level": { "kN": 845, "lbf": 190000 },
+      "thrust_vacuum": { "kN": 934, "lbf": 210000 },
+      "number": 9,
+      "type": "merlin",
+      "version": "1D+",
+      "layout": "octaweb"
+    },
+    "flickr_images": [
+      "https://farm5.staticflickr.com/4599/38583829295_581f34dd84_b.jpg"
+    ]
+  },
+  {
+    "id": "5e9d0d95eda69974db09d1ed",
+    "name": "Falcon Heavy",
+    "type": "rocket",
+    "active": true,
+    "stages": 2,
+    "boosters": 2,
+    "cost_per_launch": 90000000,
+    "success_rate_pct": 100,
+    "first_flight": "2018-02-06",
+    "country": "United States",
+    "company": "SpaceX",
+    "height": { "meters": 70, "feet": 229.6 },
+    "diameter": { "meters": 12.2, "feet": 39.9 },
+    "mass": { "kg": 1420788, "lb": 3125735 },
+    "payload_weights": [
+      { "id": "leo", "name": "Low Earth Orbit", "kg": 63800, "lb": 140660 },
+      { "id": "gto", "name": "Geosynchronous Transfer Orbit", "kg": 26700, "lb": 58860 }
+    ],
+    "first_stage": {
+      "thrust_sea_level": { "kN": 22819, "lbf": 5130000 },
+      "thrust_vacuum": { "kN": 24681, "lbf": 5548500 },
+      "reusable": true,
+      "engines": 27,
+      "fuel_amount_tons": 1155,
+      "burn_time_sec": 162
+    },
+    "second_stage": {
+      "thrust": { "kN": 934, "lbf": 210000 },
+      "payloads": {
+        "composite_fairing": { "height": { "meters": 13.1, "feet": 43 }, "diameter": { "meters": 5.2, "feet": 17 } },
+        "option_1": "main payload"
+      },
+      "reusable": false,
+      "engines": 1,
+      "fuel_amount_tons": 90,
+      "burn_time_sec": 397
+    },
+    "engines": {
+      "isp": { "sea_level": 288, "vacuum": 348 },
+      "number": 27,
+      "type": "merlin",
+      "version": "1D+",
+      "layout": "octaweb"
+    },
+    "flickr_images": [
+      "https://farm5.staticflickr.com/4711/40126461411_aabc643fd8_b.jpg"
+    ]
+  },
+  {
+    "id": "5e9d0d96eda699382d09d1ee",
+    "name": "Starship",
+    "type": "rocket",
+    "active": true,
+    "stages": 2,
+    "boosters": 0,
+    "cost_per_launch": 7000000,
+    "success_rate_pct": 100,
+    "first_flight": "2023-04-20",
+    "country": "United States",
+    "company": "SpaceX",
+    "height": { "meters": 120, "feet": 394 },
+    "diameter": { "meters": 9, "feet": 29.5 },
+    "mass": { "kg": 1335000, "lb": 2943170 },
+    "payload_weights": [
+      { "id": "leo", "name": "Low Earth Orbit", "kg": 150000, "lb": 330000 }
+    ],
+    "first_stage": {
+      "thrust_sea_level": { "kN": 72000, "lbf": 16000000 },
+      "thrust_vacuum": { "kN": 0, "lbf": 0 },
+      "reusable": true,
+      "engines": 33,
+      "fuel_amount_tons": 3400,
+      "burn_time_sec": 165
+    },
+    "second_stage": {
+      "thrust": { "kN": 1500, "lbf": 340000 },
+      "payloads": {
+        "composite_fairing": { "height": { "meters": 0, "feet": 0 }, "diameter": { "meters": 0, "feet": 0 } },
+        "option_1": "Starlink or Crew"
+      },
+      "reusable": true,
+      "engines": 6,
+      "fuel_amount_tons": 1200,
+      "burn_time_sec": 350
+    },
+    "engines": {
+      "isp": { "sea_level": 330, "vacuum": 380 },
+      "number": 33,
+      "type": "raptor",
+      "version": "2",
+      "layout": "concentric"
+    },
+    "flickr_images": [
+      "https://live.staticflickr.com/65535/52834316901_38740f941f_b.jpg"
+    ]
+  }
+]
